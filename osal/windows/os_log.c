@@ -36,22 +36,22 @@ void os_log_error(const char* tag, const char* msg, va_list list)
 
 void os_log_trace(const char* tag, const char* msg, va_list list)
 {
-    os_log_info(const char * tag, const char * msg, va_list list);
+    os_log_info(tag, msg, list);
 }
 
 void os_log_debug(const char* tag, const char* msg, va_list list)
 {
-    os_log_info(const char * tag, const char * msg, va_list list);
+    os_log_info(tag, msg, list);
 }
 
 void os_log_warn(const char* tag, const char* msg, va_list list)
 {
-    os_log_error(const char * tag, const char * msg, va_list list);
+    os_log_error(tag, msg, list);
 }
 
 void os_log_fatal(const char* tag, const char* msg, va_list list)
 {
-    os_log_error(const char * tag, const char * msg, va_list list);
+    os_log_error(tag, msg, list);
 }
 
 #endif

@@ -14,13 +14,56 @@
  * limitations under the License.
  */
 
+#include <stdarg.h> // va_list
+#include "os_log.h"
+
 #if defined(linux) && !defined(__ANDROID__)
+// From osal/windows/os_log.c
+#include <stdio.h> // snprintf
+#include <stdarg.h> // vfprintf
+
+#define LINE_SZ 1024
+
+void os_log_info(const char* tag, const char* msg, va_list list)
+{
+    char line[LINE_SZ] = {0};
+    snprintf(line, sizeof(line), "%s: %s", tag, msg);
+    vfprintf(stdout, line, list);
+}
+
+void os_log_error(const char* tag, const char* msg, va_list list)
+{
+    char line[LINE_SZ] = {0};
+    snprintf(line, sizeof(line), "%s: %s", tag, msg);
+    vfprintf(stderr, line, list);
+}
+
+void os_log_trace(const char* tag, const char* msg, va_list list)
+{
+    os_log_info(tag, msg, list);
+}
+
+void os_log_debug(const char* tag, const char* msg, va_list list)
+{
+    os_log_info(tag, msg, list);
+}
+
+void os_log_warn(const char* tag, const char* msg, va_list list)
+{
+    os_log_error(tag, msg, list);
+}
+
+void os_log_fatal(const char* tag, const char* msg, va_list list)
+{
+    os_log_error(tag, msg, list);
+}
+
+#elif 0 // disable syslog
 #include <stdio.h>
 #include <stdarg.h>
 #include <syslog.h>
 
-#include "os_log.h"
-#include "os_env.h"
+#include "os_env.h" // os_get_env_u32
 
 #define LINE_SZ 1024
 
