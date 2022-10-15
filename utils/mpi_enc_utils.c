@@ -18,16 +18,17 @@
 
 #include <string.h>
 
+#include "rk_mpi.h"
+
 #include "mpp_mem.h"
 #include "mpp_debug.h"
 #include "mpp_buffer.h"
-
-#include "rk_mpi.h"
-#include "utils.h"
 #include "mpp_common.h"
-
 #include "mpp_opt.h"
+
+#include "utils.h"
 #include "mpi_enc_utils.h"
+#include "iniparser.h"
 
 #define MAX_FILE_NAME_LENGTH        256
 
@@ -823,10 +824,15 @@ MPP_RET mpi_enc_gen_ref_cfg(MppEncRefCfg ref, RK_S32 gop_mode)
 
 MPP_RET mpi_enc_gen_smart_gop_ref_cfg(MppEncRefCfg ref, RK_S32 gop_len, RK_S32 vi_len)
 {
+    // smart
+    //   /-> P1 ------> P2 ------> P3 ... Pvi_len-1           /-> P1 ------> P2 ------> P3 ... Pvi_len-1
+    //  /                                                    /
+    // P0 ------------------------------------------------> Pgop_len-1
+    // |vi| means |virtual i-frame|
     MppEncRefLtFrmCfg lt_ref[4];
     MppEncRefStFrmCfg st_ref[16];
     RK_S32 lt_cnt = 1;
-    RK_S32 st_cnt = 8;
+    RK_S32 st_cnt = 3; // k*2+1
     RK_S32 pos = 0;
     MPP_RET ret = MPP_OK;
 
@@ -839,7 +845,7 @@ MPP_RET mpi_enc_gen_smart_gop_ref_cfg(MppEncRefCfg ref, RK_S32 gop_len, RK_S32 v
     lt_ref[0].lt_idx        = 0;
     lt_ref[0].temporal_id   = 0;
     lt_ref[0].ref_mode      = REF_TO_PREV_LT_REF;
-    lt_ref[0].lt_gap        = gop_len;
+    lt_ref[0].lt_gap        = gop_len; // k*gop_len
     lt_ref[0].lt_delay      = 0;
 
     ret = mpp_enc_ref_cfg_add_lt_cfg(ref, 1, lt_ref);
@@ -852,13 +858,13 @@ MPP_RET mpi_enc_gen_smart_gop_ref_cfg(MppEncRefCfg ref, RK_S32 gop_len, RK_S32 v
     st_ref[pos].repeat      = 0;
     pos++;
 
-    /* st 1 layer 1 - non-ref */
-    if (vi_len > 1) {
+    /* st 1 layer 1 - ref */
+    if (vi_len > 1) { // with skipref
         st_ref[pos].is_non_ref  = 0;
         st_ref[pos].temporal_id = 1;
         st_ref[pos].ref_mode    = REF_TO_PREV_REF_FRM;
         st_ref[pos].ref_arg     = 0;
-        st_ref[pos].repeat      = vi_len - 2;
+        st_ref[pos].repeat      = vi_len - 2; // The overall frame count with the same config is repeat + 1
         pos++;
     }
 

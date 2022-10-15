@@ -1379,7 +1379,7 @@ MPP_RET name_to_coding_type(const char *name, MppCodingType *coding)
     return ret;
 }
 
-typedef struct FpsCalcImpl_t {
+struct FpsCalc_t {
     spinlock_t  lock;
     FpsCalcCb   callback;
 
@@ -1388,11 +1388,11 @@ typedef struct FpsCalcImpl_t {
 
     RK_S64      last_start;
     RK_S64      last_count;
-} FpsCalcImpl;
+};
 
-MPP_RET fps_calc_init(FpsCalc *ctx)
+MPP_RET fps_calc_init(FpsCalc **ctx)
 {
-    FpsCalcImpl *impl = mpp_calloc(FpsCalcImpl, 1);
+    FpsCalc *impl = mpp_calloc(FpsCalc, 1);
     MPP_RET ret = MPP_NOK;
 
     if (impl) {
@@ -1404,16 +1404,16 @@ MPP_RET fps_calc_init(FpsCalc *ctx)
     return ret;
 }
 
-MPP_RET fps_calc_deinit(FpsCalc ctx)
+MPP_RET fps_calc_deinit(FpsCalc *ctx)
 {
     MPP_FREE(ctx);
 
     return MPP_OK;
 }
 
-MPP_RET fps_calc_set_cb(FpsCalc ctx, FpsCalcCb cb)
+MPP_RET fps_calc_set_cb(FpsCalc *ctx, FpsCalcCb cb)
 {
-    FpsCalcImpl *impl = (FpsCalcImpl *)ctx;
+    FpsCalc *impl = (FpsCalc *)ctx;
 
     if (impl)
         impl->callback = cb;
@@ -1421,9 +1421,9 @@ MPP_RET fps_calc_set_cb(FpsCalc ctx, FpsCalcCb cb)
     return MPP_OK;
 }
 
-MPP_RET fps_calc_inc(FpsCalc ctx)
+MPP_RET fps_calc_inc(FpsCalc *ctx)
 {
-    FpsCalcImpl *impl = (FpsCalcImpl *)ctx;
+    FpsCalc *impl = (FpsCalc *)ctx;
     RK_S64 total_time = 0;
     RK_S64 total_count = 0;
     RK_S64 last_time = 0;

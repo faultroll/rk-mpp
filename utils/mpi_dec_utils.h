@@ -18,12 +18,13 @@
 #define __MPI_DEC_UTILS_H__
 
 #include <stdio.h>
-#include "utils.h"
+#include "rk_vdec_cmd.h"
 
 #define MAX_FILE_NAME_LENGTH        256
 #define MPI_DEC_STREAM_SIZE         (SZ_4K)
 #define MPI_DEC_LOOP_COUNT          4
 
+typedef struct FpsCalc_t FpsCalc; // #include "utils.h"
 typedef void* FileReader;
 
 typedef struct FileBufSlot_t {
@@ -58,7 +59,7 @@ typedef struct MpiDecTestCmd_t {
 
     /* data for share */
     FileReader      reader;
-    FpsCalc         fps;
+    FpsCalc         *fps;
 
     /* runtime log flag */
     RK_U32          quiet;
@@ -66,7 +67,7 @@ typedef struct MpiDecTestCmd_t {
     char            *file_slt;
 } MpiDecTestCmd;
 
-extern OptionInfo mpi_dec_cmd[];
+// extern OptionInfo mpi_dec_cmd[];
 
 RK_S32  mpi_dec_test_cmd_init(MpiDecTestCmd* cmd, int argc, char **argv);
 RK_S32  mpi_dec_test_cmd_deinit(MpiDecTestCmd* cmd);

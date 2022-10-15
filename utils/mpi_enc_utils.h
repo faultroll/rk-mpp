@@ -18,9 +18,10 @@
 #define __MPI_ENC_UTILS_H__
 
 #include <stdio.h>
-
 #include "rk_venc_cmd.h"
-#include "iniparser.h"
+
+typedef struct _dictionary_ dictionary; // #include "iniparser.h"
+typedef struct FpsCalc_t FpsCalc; // #include "utils.h"
 
 typedef struct MpiEncTestArgs_t {
     char                *file_input;
@@ -72,7 +73,7 @@ typedef struct MpiEncTestArgs_t {
     RK_U32              quiet;
     /* -v f runtime fps log flag */
     RK_U32              trace_fps;
-    FpsCalc             fps;
+    FpsCalc             *fps;
     RK_U32              psnr_en;
     RK_U32              ssim_en;
     char                *file_slt;
