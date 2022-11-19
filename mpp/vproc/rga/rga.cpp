@@ -28,6 +28,7 @@
 
 #include "rga.h"
 #include "rga_api.h"
+#include "../rga3/NormalRga.h"
 
 static RK_U32 rga_debug = 0;
 
@@ -38,7 +39,8 @@ static RK_U32 rga_debug = 0;
 #define rga_dbg(flag, fmt, ...) _mpp_dbg(rga_debug, flag, fmt, ## __VA_ARGS__)
 #define rga_dbg_func(fmt, ...)  _mpp_dbg_f(rga_debug, RGB_DBG_FUNCTION, fmt, ## __VA_ARGS__)
 #define rga_dbg_copy(fmt, ...)  _mpp_dbg(rga_debug, RGB_DBG_COPY, fmt, ## __VA_ARGS__)
-#define rga_dbg_dup(fmt, ...)   _mpp_dbg(rga_debug, RGB_DBG_COPY, fmt, ## __VA_ARGS__)
+#define rga_dbg_dup(fmt, ...)   _mpp_dbg(rga_debug, RGB_DBG_DUP_FIELD, fmt, ## __VA_ARGS__)
+static void RgaLogOutRgaReq(RgaReq rgaReg);
 
 #define DEFAULT_RGA_DEV     "/dev/rga"
 
@@ -47,6 +49,8 @@ typedef struct RgaCtxImpl_t {
 
     // context holds only one request structure and serial process all input
     RgaReq request;
+
+    void *ctx; // NormalRga
 } RgaCtxImpl;
 
 static int is_yuv_format(int fmt)
@@ -127,6 +131,8 @@ MPP_RET rga_init(RgaCtx *ctx)
         goto END;
     }
 
+    RgaInit(&impl->ctx);
+
 END:
     *ctx = impl;
     rga_dbg_func("out\n");
@@ -146,6 +152,8 @@ MPP_RET rga_deinit(RgaCtx ctx)
         ret = MPP_ERR_NULL_PTR;
         goto END;
     }
+    
+    RgaDeInit(&impl->ctx);
 
     if (impl->rga_fd >= 0) {
         close(impl->rga_fd);
@@ -160,6 +168,8 @@ END:
 
 static MPP_RET rga_ioctl(RgaCtxImpl *impl)
 {
+    RgaLogOutRgaReq(impl->request);
+
     int io_ret = ioctl(impl->rga_fd, RGA_BLIT_SYNC, &impl->request);
     if (io_ret) {
         mpp_err("rga ioctl failed errno:%d %s", errno, strerror(errno));
@@ -219,7 +229,7 @@ static MPP_RET config_rga_yuv2rgb_mode(RgaCtx ctx)
     return MPP_OK;
 }
 
-MPP_RET rga_control(RgaCtx ctx, RgaCmd cmd, void *param)
+static MPP_RET rga_control_v2(RgaCtx ctx, RgaCmd cmd, void *param)
 {
     if (NULL == ctx) {
         mpp_err_f("invalid NULL input\n");
@@ -282,7 +292,7 @@ MPP_RET rga_control(RgaCtx ctx, RgaCmd cmd, void *param)
 }
 
 // sample for copy function
-MPP_RET rga_copy(RgaCtx ctx, MppFrame src, MppFrame dst)
+static MPP_RET rga_copy_v2(RgaCtx ctx, MppFrame src, MppFrame dst)
 {
     MPP_RET ret = MPP_OK;
     RgaCtxImpl *impl = (RgaCtxImpl *)ctx;
@@ -352,7 +362,7 @@ END:
 }
 
 // sample for duplicate field to frame function
-MPP_RET rga_dup_field(RgaCtx ctx, MppFrame frame)
+static MPP_RET rga_dup_field_v2(RgaCtx ctx, MppFrame frame)
 {
     MPP_RET ret = MPP_OK;
     RgaCtxImpl *impl = (RgaCtxImpl *)ctx;
@@ -407,4 +417,172 @@ MPP_RET rga_dup_field(RgaCtx ctx, MppFrame frame)
 END:
     rga_dbg_func("out\n");
     return ret;
+}
+
+// from NormalRgaApi.cpp/NormalRgaLogOutRgaReq
+static void RgaLogOutRgaReq(RgaReq rgaReg) {
+    rga_dbg_func("render_mode = %d rotate_mode = %d\n",
+          rgaReg.render_mode, rgaReg.rotate_mode);
+    rga_dbg_func("src:[%lx,%lx,%lx],x-y[%d,%d],w-h[%d,%d],vw-vh[%d,%d],f=%d\n",
+          (unsigned long)rgaReg.src.yrgb_addr, (unsigned long)rgaReg.src.uv_addr, (unsigned long)rgaReg.src.v_addr,
+          rgaReg.src.x_offset, rgaReg.src.y_offset,
+          rgaReg.src.act_w, rgaReg.src.act_h,
+          rgaReg.src.vir_w, rgaReg.src.vir_h, rgaReg.src.format);
+    rga_dbg_func("dst:[%lx,%lx,%lx],x-y[%d,%d],w-h[%d,%d],vw-vh[%d,%d],f=%d\n",
+          (unsigned long)rgaReg.dst.yrgb_addr, (unsigned long)rgaReg.dst.uv_addr, (unsigned long)rgaReg.dst.v_addr,
+          rgaReg.dst.x_offset, rgaReg.dst.y_offset,
+          rgaReg.dst.act_w, rgaReg.dst.act_h,
+          rgaReg.dst.vir_w, rgaReg.dst.vir_h, rgaReg.dst.format);
+    rga_dbg_func("pat:[%lx,%lx,%lx],x-y[%d,%d],w-h[%d,%d],vw-vh[%d,%d],f=%d\n",
+          (unsigned long)rgaReg.pat.yrgb_addr, (unsigned long)rgaReg.pat.uv_addr, (unsigned long)rgaReg.pat.v_addr,
+          rgaReg.pat.x_offset, rgaReg.pat.y_offset,
+          rgaReg.pat.act_w, rgaReg.pat.act_h,
+          rgaReg.pat.vir_w, rgaReg.pat.vir_h, rgaReg.pat.format);
+    rga_dbg_func("ROP:[%lx,%x,%x],LUT[%lx]\n",
+          (unsigned long)rgaReg.rop_mask_addr, rgaReg.alpha_rop_flag,
+          rgaReg.rop_code, (unsigned long)rgaReg.LUT_addr);
+
+    rga_dbg_func("color:[%x,%x,%x,%x,%x]\n",
+          rgaReg.color_key_max, rgaReg.color_key_min,
+          rgaReg.fg_color, rgaReg.bg_color, rgaReg.color_fill_mode);
+
+    rga_dbg_func("MMU:[%d,%lx,%x]\n", 
+          rgaReg.mmu_info.mmu_en, (unsigned long)rgaReg.mmu_info.base_addr, rgaReg.mmu_info.mmu_flag);
+
+
+    rga_dbg_func("mode[%d,%d,%d,%d,%d]\n", rgaReg.palette_mode, rgaReg.yuv2rgb_mode,
+          rgaReg.endian_mode, rgaReg.src_trans_mode,rgaReg.scale_mode);
+
+    return;
+}
+
+// compatible
+static RgaSURF_FORMAT rga_fmt_map_normalrga(MppFrameFormat fmt)
+{
+    RgaSURF_FORMAT ret;
+
+    switch (fmt) {
+    case MPP_FMT_YUV420P:
+        ret = RK_FORMAT_YCbCr_420_P;
+        break;
+    case MPP_FMT_YUV420SP:
+        ret = RK_FORMAT_YCbCr_420_SP;
+        break;
+    case MPP_FMT_YUV422P:
+        ret = RK_FORMAT_YCbCr_422_P;
+        break;
+    case MPP_FMT_YUV422SP:
+        ret = RK_FORMAT_YCrCb_422_SP;
+        break;
+    case MPP_FMT_RGB565:
+        ret = RK_FORMAT_RGB_565;
+        break;
+    case MPP_FMT_RGB888:
+        ret = RK_FORMAT_RGB_888;
+        break;
+    case MPP_FMT_ARGB8888:
+        ret = RK_FORMAT_RGBA_8888;
+        break;
+    default:
+        ret = RK_FORMAT_UNKNOWN;
+        mpp_err("unsupport mpp fmt %d found\n", fmt);
+        break;
+    }
+
+    return ret;
+}
+static MPP_RET rga_copy_v3(RgaCtx ctx, MppFrame src, MppFrame dst)
+{
+    MPP_RET ret = MPP_OK;
+    MppBuffer src_buf = mpp_frame_get_buffer(src);
+    MppBuffer dst_buf = mpp_frame_get_buffer(dst);
+    RK_U32 src_w = mpp_frame_get_width(src);
+    RK_U32 src_h = mpp_frame_get_height(src);
+    RK_U32 dst_w = mpp_frame_get_width(dst);
+    RK_U32 dst_h = mpp_frame_get_height(dst);
+    RK_S32 src_fd = mpp_buffer_get_fd(src_buf);
+    RK_S32 dst_fd = mpp_buffer_get_fd(dst_buf);
+
+    RgaSURF_FORMAT src_fmt = rga_fmt_map_normalrga(mpp_frame_get_fmt(src));
+    RgaSURF_FORMAT dst_fmt = rga_fmt_map_normalrga(mpp_frame_get_fmt(dst));
+
+    rga_dbg_func("in\n");
+
+    if (src_fmt >= RK_FORMAT_UNKNOWN || dst_fmt >= RK_FORMAT_UNKNOWN) {
+        mpp_err("invalid input format for rga process src %d dst %d\n", src_fmt, dst_fmt);
+        ret = MPP_NOK;
+        goto END;
+    }
+
+    mpp_assert(src_w > 0 && src_h > 0);
+
+    if (dst_w == 0 || dst_h == 0) {
+        dst_w = src_w;
+        dst_h = src_h;
+    }
+
+    rga_dbg_copy("[fd:w:h:fmt] src - %d:%d:%d:%d dst - %d:%d:%d:%d\n",
+                 src_fd, src_w, src_h, src_fmt,
+                 dst_fd, dst_w, dst_h, dst_fmt);
+
+    rga_info_t src_info;
+    memset(&src_info, 0, sizeof(rga_info_t));
+    src_info.fd = src_fd;
+    src_info.mmuFlag = 1;
+    src_info.hnd = -1;
+    // src_info.phyAddr = ;
+    src_info.virAddr = mpp_buffer_get_ptr(src_buf);
+    src_info.sync_mode = RGA_BLIT_SYNC;
+    rga_set_rect(&src_info.rect, 0,0,src_w,src_h,mpp_frame_get_hor_stride(src),mpp_frame_get_ver_stride(src),src_fmt);
+
+    rga_info_t dst_info;
+    memset(&dst_info, 0, sizeof(rga_info_t));
+    dst_info.fd = dst_fd;
+    dst_info.mmuFlag = 1;
+    dst_info.hnd = -1;
+    // dst_info.phyAddr = ;
+    dst_info.virAddr = mpp_buffer_get_ptr(dst_buf);
+    dst_info.sync_mode = RGA_BLIT_SYNC;
+    rga_set_rect(&dst_info.rect, 0,0,dst_w,dst_h,mpp_frame_get_hor_stride(dst),mpp_frame_get_ver_stride(dst),dst_fmt);
+
+    ret = (0 == RgaBlit(&src_info, &dst_info, NULL)) ? MPP_OK : MPP_NOK;
+END:
+    rga_dbg_func("out\n");
+    return ret;
+}
+MPP_RET rga_control(RgaCtx ctx, RgaCmd cmd, void *param)
+{
+    if (RgaGerVersion() == 1) {
+        return MPP_NOK; // not support
+    } else if (RgaGerVersion() == 2) {
+        return rga_control_v2(ctx, cmd, param);
+    } else if (RgaGerVersion() == 3) {
+        return MPP_NOK; // not support
+    } else {
+        return MPP_NOK; // something failed
+    }
+}
+MPP_RET rga_copy(RgaCtx ctx, MppFrame src, MppFrame dst)
+{
+    if (RgaGerVersion() == 1) {
+        return MPP_NOK; // not support
+    } else if (RgaGerVersion() == 2) {
+        return rga_copy_v2(ctx, src, dst);
+    } else if (RgaGerVersion() == 3) {
+        return rga_copy_v3(ctx, src, dst);
+    } else {
+        return MPP_NOK; // something failed
+    }
+}
+MPP_RET rga_dup_field(RgaCtx ctx, MppFrame frame)
+{
+    if (RgaGerVersion() == 1) {
+        return MPP_NOK; // not support
+    } else if (RgaGerVersion() == 2) {
+        return rga_dup_field_v2(ctx, frame);
+    } else if (RgaGerVersion() == 3) {
+        return MPP_NOK; // not support
+    } else {
+        return MPP_NOK; // something failed
+    }
 }

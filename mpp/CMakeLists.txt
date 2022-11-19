@@ -54,7 +54,7 @@ set_target_properties(${MPP_SHARED} PROPERTIES FOLDER "mpp")
 set_target_properties(${MPP_SHARED} PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 target_link_libraries(${MPP_SHARED} mpp_codec mpp_hal mpp_vproc ${ASAN_LIB}
                       ${BEGIN_WHOLE_ARCHIVE} mpp_base ${END_WHOLE_ARCHIVE}
-                      ${BEGIN_WHOLE_ARCHIVE} vproc_rga vproc_iep vproc_iep2 ${END_WHOLE_ARCHIVE})
+                      ${BEGIN_WHOLE_ARCHIVE} vproc_rga vproc_rga3 vproc_iep vproc_iep2 ${END_WHOLE_ARCHIVE})
 set_target_properties(${MPP_SHARED} PROPERTIES C_VISIBILITY_PRESET default)
 set_target_properties(${MPP_SHARED} PROPERTIES CXX_VISIBILITY_PRESET default)
 
