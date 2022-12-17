@@ -883,6 +883,107 @@ MPP_RET mpi_enc_gen_smart_gop_ref_cfg(MppEncRefCfg ref, RK_S32 gop_len, RK_S32 v
     return ret;
 }
 
+#define OSD_DRAW 0
+#if OSD_DRAW
+typedef struct _location_s_
+{
+    int x;
+    int y;
+    int w;
+    int h;
+} location_s;
+
+static void osd_draw_rect(void *pAddr, int rgn_w, int rgn_h, location_s *pstLoc, int color)
+{
+    int thick_cnt  = 0;
+    int width_cnt  = 0;
+    int height_cnt = 0;
+    location_s stRect    = *pstLoc;
+    const int line_thick = 4;
+
+    memset(pAddr, 0x00, rgn_w * rgn_h);
+
+    uint32_t cavasStride = rgn_w;
+
+    stRect.x    = 0; /* x y 都为0是因为画布大小就是矩形框的大小，从画布左上角开始画 */
+    stRect.y    = 0;
+    if(stRect.w < 10 + 2 * line_thick)
+    {
+        stRect.w = 10 + 2 * line_thick;
+    }
+    if(stRect.h < 10 + 2 * line_thick)
+    {
+        stRect.h = 10 + 2 * line_thick;
+    }
+    if(stRect.x < 0)
+    {
+        stRect.x = 0;
+    }
+    if(stRect.y < 0)
+    {
+        stRect.y = 0;
+    }
+
+    if(stRect.x % 2)
+    {
+        stRect.x--;
+    }
+    if(stRect.y % 2)
+    {
+        stRect.y--;
+    }
+    if(stRect.h % 2)
+    {
+        stRect.h--;
+    }
+    if(stRect.w % 2)
+    {
+        stRect.w--;
+    }
+
+    //A---->B
+    for (thick_cnt = 0; thick_cnt < line_thick; thick_cnt++)
+    {
+        char *p = pAddr + (stRect.x + (stRect.y + thick_cnt) * cavasStride);
+        for (width_cnt = 0; width_cnt < stRect.w; width_cnt++)
+        {
+            *p = color; // 0xFC00;
+            p++;
+        }
+    }
+    //C----->D
+    for (thick_cnt = 0; thick_cnt < line_thick; thick_cnt++)
+    {
+        char *p = pAddr + (stRect.x + (stRect.y + stRect.h - line_thick + thick_cnt) * cavasStride);
+        for (width_cnt = 0; width_cnt < stRect.w; width_cnt++)
+        {
+            *p = color; // 0xFC00;
+            p++;
+        }
+    }
+    //A----->C
+    for (height_cnt = line_thick; height_cnt < stRect.h - line_thick; height_cnt++)
+    {
+        char *p = pAddr + (stRect.x + (stRect.y + height_cnt) * cavasStride);
+        for (width_cnt = 0; width_cnt < line_thick; width_cnt++)
+        {
+            *p = color; // 0xFC00;
+            p++;
+        }
+    }
+    //B----->D
+    for (height_cnt = line_thick; height_cnt < stRect.h - line_thick; height_cnt++)
+    {
+        char *p = pAddr + ((stRect.y + height_cnt) * cavasStride + (stRect.x + stRect.w - line_thick));
+        for (width_cnt = 0; width_cnt < line_thick; width_cnt++)
+        {
+            *p = color; // 0xFC00;
+            p++;
+        }
+    }
+}
+#endif //OSD_DRAW
+
 MPP_RET mpi_enc_gen_osd_plt(MppEncOSDPlt *osd_plt, RK_U32 frame_cnt)
 {
     /*
@@ -896,13 +997,13 @@ MPP_RET mpi_enc_gen_osd_plt(MppEncOSDPlt *osd_plt, RK_U32 frame_cnt)
         MPP_ENC_OSD_PLT_GREEN,
         MPP_ENC_OSD_PLT_CYAN,
         MPP_ENC_OSD_PLT_TRANS,
-        MPP_ENC_OSD_PLT_BLACK,
+        MPP_ENC_OSD_PLT_BLACK, // TODO(lgY): white pixels shows in black, wired
         MPP_ENC_OSD_PLT_WHITE,
     };
 
     if (osd_plt) {
         RK_U32 k = 0;
-        RK_U32 base = frame_cnt & 7;
+        RK_U32 base = 5;//frame_cnt & 7; //5: 0-MPP_ENC_OSD_PLT_TRANS,1-MPP_ENC_OSD_PLT_BLACK,...
 
         for (k = 0; k < 256; k++)
             osd_plt->data[k].val = plt_table[(base + k) % 8];
@@ -915,7 +1016,7 @@ MPP_RET mpi_enc_gen_osd_data(MppEncOSDData *osd_data, MppBufferGroup group,
 {
     MppEncOSDRegion *region = NULL;
     RK_U32 k = 0;
-    RK_U32 num_region = 8;
+    RK_U32 num_region = 1;//8;
     RK_U32 buf_offset = 0;
     RK_U32 buf_size = 0;
     RK_U32 mb_w_max = MPP_ALIGN(width, 16) / 16;
@@ -977,7 +1078,20 @@ MPP_RET mpi_enc_gen_osd_data(MppEncOSDData *osd_data, MppBufferGroup group,
             mb_h = region->num_mb_y;
             buf_offset = region->buf_offset;
 
-            memset(ptr + buf_offset, k, mb_w * mb_h * 256);
+            // NOTE(lgY): see plt_table in mpi_enc_gen_osd_plt
+            //  the color value is plt_table[color/8], and MPP_ENC_OSD_PLT_TRANS is important,
+            //  which means transparent (show the video not osd)
+            RK_U8 color = 6 + 8 * 4;
+#if OSD_DRAW
+            location_s stLoc;
+            stLoc.x = 0;
+            stLoc.y = 0;
+            stLoc.w = mb_w * 16;//240;
+            stLoc.h = mb_h * 16;//80;
+            osd_draw_rect(ptr + buf_offset, mb_w * 16, mb_h * 16, &stLoc, color);
+#else
+            memset(ptr + buf_offset, color, mb_w * mb_h * 256);
+#endif //OSD_DRAW
         }
     }
 
