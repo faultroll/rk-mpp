@@ -55,6 +55,7 @@ MPP_RET rga_control(RgaCtx ctx, RgaCmd cmd, void *param);
 
 MPP_RET rga_copy(RgaCtx ctx, MppFrame src, MppFrame dst);
 MPP_RET rga_dup_field(RgaCtx ctx, MppFrame frame);
+MPP_RET rga_blit(RgaCtx ctx, MppFrame src, MppFrame dst); // buffer/rect/stride, can be used for copy/crop/...
 
 #ifdef __cplusplus
 }

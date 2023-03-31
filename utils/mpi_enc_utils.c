@@ -990,23 +990,23 @@ MPP_RET mpi_enc_gen_osd_plt(MppEncOSDPlt *osd_plt, RK_U32 frame_cnt)
      * osd idx size range from 16x16 bytes(pixels) to hor_stride*ver_stride(bytes).
      * for general use, 1/8 Y buffer is enough.
      */
-    static RK_U32 plt_table[8] = {
+    static RK_U32 plt_table[7] = {
         MPP_ENC_OSD_PLT_RED,
         MPP_ENC_OSD_PLT_YELLOW,
         MPP_ENC_OSD_PLT_BLUE,
         MPP_ENC_OSD_PLT_GREEN,
         MPP_ENC_OSD_PLT_CYAN,
-        MPP_ENC_OSD_PLT_TRANS,
-        MPP_ENC_OSD_PLT_BLACK, // TODO(lgY): white pixels shows in black, wired
+        MPP_ENC_OSD_PLT_BLACK, // TODO(lgY): white pixels shows in black rect, soooo wired
         MPP_ENC_OSD_PLT_WHITE,
     };
 
     if (osd_plt) {
         RK_U32 k = 0;
-        RK_U32 base = 5;//frame_cnt & 7; //5: 0-MPP_ENC_OSD_PLT_TRANS,1-MPP_ENC_OSD_PLT_BLACK,...
+        RK_U32 base = 0;//frame_cnt & 7;
 
-        for (k = 0; k < 256; k++)
-            osd_plt->data[k].val = plt_table[(base + k) % 8];
+        osd_plt->data[k].val = MPP_ENC_OSD_PLT_TRANS; // 0-MPP_ENC_OSD_PLT_TRANS
+        for (k = 1; k < 256; k++) // 1-MPP_ENC_OSD_PLT_YELLOW ... 7-MPP_ENC_OSD_PLT_RED 8-MPP_ENC_OSD_PLT_YELLOW ...
+            osd_plt->data[k].val = plt_table[(base + k) % 7];
     }
     return MPP_OK;
 }

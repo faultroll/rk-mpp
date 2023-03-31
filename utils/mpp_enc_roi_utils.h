@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef __MPI_ENC_ROI_UTILS_H__
+#define __MPI_ENC_ROI_UTILS_H__
+
 #include "rk_venc_cmd.h"
 
 typedef void* MppEncRoiCtx;
@@ -45,3 +48,5 @@ MPP_RET mpp_enc_roi_setup_meta(MppEncRoiCtx ctx, MppMeta meta);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /*__MPI_ENC_ROI_UTILS_H__*/

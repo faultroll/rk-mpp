@@ -40,7 +40,7 @@ static RK_U32 rga_debug = 0;
 #define rga_dbg_func(fmt, ...)  _mpp_dbg_f(rga_debug, RGB_DBG_FUNCTION, fmt, ## __VA_ARGS__)
 #define rga_dbg_copy(fmt, ...)  _mpp_dbg(rga_debug, RGB_DBG_COPY, fmt, ## __VA_ARGS__)
 #define rga_dbg_dup(fmt, ...)   _mpp_dbg(rga_debug, RGB_DBG_DUP_FIELD, fmt, ## __VA_ARGS__)
-static void RgaLogOutRgaReq(RgaReq rgaReg);
+static void RgaLogOutRgaReqV2(RgaReq rgaReg);
 
 #define DEFAULT_RGA_DEV     "/dev/rga"
 
@@ -168,7 +168,7 @@ END:
 
 static MPP_RET rga_ioctl(RgaCtxImpl *impl)
 {
-    RgaLogOutRgaReq(impl->request);
+    RgaLogOutRgaReqV2(impl->request);
 
     int io_ret = ioctl(impl->rga_fd, RGA_BLIT_SYNC, &impl->request);
     if (io_ret) {
@@ -420,7 +420,7 @@ END:
 }
 
 // from NormalRgaApi.cpp/NormalRgaLogOutRgaReq
-static void RgaLogOutRgaReq(RgaReq rgaReg) {
+static void RgaLogOutRgaReqV2(RgaReq rgaReg) {
     rga_dbg_func("render_mode = %d rotate_mode = %d\n",
           rgaReg.render_mode, rgaReg.rotate_mode);
     rga_dbg_func("src:[%lx,%lx,%lx],x-y[%d,%d],w-h[%d,%d],vw-vh[%d,%d],f=%d\n",
@@ -491,17 +491,28 @@ static RgaSURF_FORMAT rga_fmt_map_normalrga(MppFrameFormat fmt)
 
     return ret;
 }
-static MPP_RET rga_copy_v3(RgaCtx ctx, MppFrame src, MppFrame dst)
+static MPP_RET rga_blit_v3(RgaCtx ctx, MppFrame src, MppFrame dst)
 {
     MPP_RET ret = MPP_OK;
+    // buffer
     MppBuffer src_buf = mpp_frame_get_buffer(src);
+    RK_S32 src_fd = mpp_buffer_get_fd(src_buf);
     MppBuffer dst_buf = mpp_frame_get_buffer(dst);
+    RK_S32 dst_fd = mpp_buffer_get_fd(dst_buf);
+    // rect
+    RK_U32 src_x = mpp_frame_get_offset_x(src);
+    RK_U32 src_y = mpp_frame_get_offset_y(src);
     RK_U32 src_w = mpp_frame_get_width(src);
     RK_U32 src_h = mpp_frame_get_height(src);
+    RK_U32 dst_x = mpp_frame_get_offset_x(dst);
+    RK_U32 dst_y = mpp_frame_get_offset_y(dst);
     RK_U32 dst_w = mpp_frame_get_width(dst);
     RK_U32 dst_h = mpp_frame_get_height(dst);
-    RK_S32 src_fd = mpp_buffer_get_fd(src_buf);
-    RK_S32 dst_fd = mpp_buffer_get_fd(dst_buf);
+    // stride
+    RK_U32 src_hor = mpp_frame_get_hor_stride(src);
+    RK_U32 src_ver = mpp_frame_get_ver_stride(src);
+    RK_U32 dst_hor = mpp_frame_get_hor_stride(dst);
+    RK_U32 dst_ver = mpp_frame_get_ver_stride(dst);
 
     RgaSURF_FORMAT src_fmt = rga_fmt_map_normalrga(mpp_frame_get_fmt(src));
     RgaSURF_FORMAT dst_fmt = rga_fmt_map_normalrga(mpp_frame_get_fmt(dst));
@@ -525,6 +536,33 @@ static MPP_RET rga_copy_v3(RgaCtx ctx, MppFrame src, MppFrame dst)
                  src_fd, src_w, src_h, src_fmt,
                  dst_fd, dst_w, dst_h, dst_fmt);
 
+    // stride is not same as width for packed format
+    //  (hor_stride / bytesPerPixel()) is background width
+    /* if (src_x > src_hor) {
+        src_x = src_hor;
+    }
+    if (src_y > src_ver) {
+        src_y = src_ver;
+    }
+    if (src_x + src_w > src_hor) {
+        src_w = src_hor - src_x;
+    }
+    if (src_y + src_h > src_ver) {
+        src_h = src_ver - src_y;
+    }
+    if (dst_x > dst_hor) {
+        dst_x = dst_hor;
+    }
+    if (dst_y > dst_ver) {
+        dst_y = dst_ver;
+    }
+    if (dst_x + dst_w > dst_hor) {
+        dst_w = dst_hor - dst_x;
+    }
+    if (dst_y + dst_h > dst_ver) {
+        dst_h = dst_ver - dst_y;
+    } */
+
     rga_info_t src_info;
     memset(&src_info, 0, sizeof(rga_info_t));
     src_info.fd = src_fd;
@@ -533,7 +571,7 @@ static MPP_RET rga_copy_v3(RgaCtx ctx, MppFrame src, MppFrame dst)
     // src_info.phyAddr = ;
     src_info.virAddr = mpp_buffer_get_ptr(src_buf);
     src_info.sync_mode = RGA_BLIT_SYNC;
-    rga_set_rect(&src_info.rect, 0,0,src_w,src_h,mpp_frame_get_hor_stride(src),mpp_frame_get_ver_stride(src),src_fmt);
+    rga_set_rect(&src_info.rect,src_x,src_y,src_w,src_h,src_hor,src_ver,src_fmt);
 
     rga_info_t dst_info;
     memset(&dst_info, 0, sizeof(rga_info_t));
@@ -543,12 +581,26 @@ static MPP_RET rga_copy_v3(RgaCtx ctx, MppFrame src, MppFrame dst)
     // dst_info.phyAddr = ;
     dst_info.virAddr = mpp_buffer_get_ptr(dst_buf);
     dst_info.sync_mode = RGA_BLIT_SYNC;
-    rga_set_rect(&dst_info.rect, 0,0,dst_w,dst_h,mpp_frame_get_hor_stride(dst),mpp_frame_get_ver_stride(dst),dst_fmt);
+    rga_set_rect(&dst_info.rect,dst_x,dst_y,dst_w,dst_h,dst_hor,dst_ver,dst_fmt);
 
     ret = (0 == RgaBlit(&src_info, &dst_info, NULL)) ? MPP_OK : MPP_NOK;
 END:
     rga_dbg_func("out\n");
     return ret;
+}
+static MPP_RET rga_copy_v3(RgaCtx ctx, MppFrame src, MppFrame dst)
+{
+    // stride is not same as width for packed format
+    //  (hor_stride / bytesPerPixel()) is background width
+    /* mpp_frame_set_offset_x(src, 0);
+    mpp_frame_set_offset_y(src, 0);
+    mpp_frame_set_width(src, mpp_frame_get_hor_stride(src));
+    mpp_frame_set_height(src, mpp_frame_get_ver_stride(src));
+    mpp_frame_set_offset_x(dst, 0);
+    mpp_frame_set_offset_y(dst, 0);
+    mpp_frame_set_width(dst, mpp_frame_get_hor_stride(dst));
+    mpp_frame_set_height(dst, mpp_frame_get_ver_stride(dst)); */
+    return rga_blit_v3(ctx, src, dst);
 }
 MPP_RET rga_control(RgaCtx ctx, RgaCmd cmd, void *param)
 {
@@ -582,6 +634,18 @@ MPP_RET rga_dup_field(RgaCtx ctx, MppFrame frame)
         return rga_dup_field_v2(ctx, frame);
     } else if (RgaGerVersion() == 3) {
         return MPP_NOK; // not support
+    } else {
+        return MPP_NOK; // something failed
+    }
+}
+MPP_RET rga_blit(RgaCtx ctx, MppFrame src, MppFrame dst)
+{
+    if (RgaGerVersion() == 1) {
+        return MPP_NOK; // not support
+    } else if (RgaGerVersion() == 2) {
+        return MPP_NOK; // not support
+    } else if (RgaGerVersion() == 3) {
+        return rga_blit_v3(ctx, src, dst);
     } else {
         return MPP_NOK; // something failed
     }

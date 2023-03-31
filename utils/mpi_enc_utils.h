@@ -17,7 +17,7 @@
 #ifndef __MPI_ENC_UTILS_H__
 #define __MPI_ENC_UTILS_H__
 
-#include <stdio.h>
+// #include <stdio.h>
 #include "rk_venc_cmd.h"
 
 typedef struct _dictionary_ dictionary; // #include "iniparser.h"
